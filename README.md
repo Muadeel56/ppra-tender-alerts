@@ -61,13 +61,13 @@ Step 4: Run the Test API Script
 Test the connectivity to the PPRA API by running the test script:
 
 ```bash
-python test/test_api.py
+python tests/test_api.py
 ```
 
 Or if you need to use `python3`:
 
 ```bash
-python3 test/test_api.py
+python3 tests/test_api.py
 ```
 
 This script will:
@@ -243,6 +243,9 @@ Access the application at http://localhost:5173 (Vite default port).
 
 Project Structure
 ppra-tender-alerts/
+├─ scripts/           # Python scripts (fetch_tenders.py, etc.)
+├─ data/              # JSON or DB storage
+├─ tests/             # Test scripts
 ├─ backend/
 │  ├─ ppra_tender_alerts/
 │  ├─ tenders/
@@ -258,8 +261,9 @@ ppra-tender-alerts/
 │  │  └─ main.jsx
 │  ├─ index.html
 │  └─ package.json
-├─ test/
-│  └─ test_api.py
+├─ .env               # Environment variables (create from .env.example)
+├─ .env.example       # Environment variables template
+├─ .gitignore
 ├─ docker-compose.yml
 └─ README.md
 
