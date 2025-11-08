@@ -2,7 +2,92 @@ PPRA Tender Alerts
 
 PPRA Tender Alerts is a web application that allows users to track and get notifications for tenders published by the Public Procurement Regulatory Authority (PPRA). This project leverages a modern tech stack including React, Django REST API, and PostgreSQL, providing a real-time, easy-to-use interface to manage and monitor tender data.
 
+Quick Start
+
+This section will help you get started quickly by setting up the development environment and running the test API script.
+
+Prerequisites
+
+- Python 3.12 or higher
+- Git
+
+Step 1: Clone the Repository
+
+Clone the repository to your local machine:
+
+```bash
+git clone https://github.com/your-username/ppra-tender-alerts.git
+cd ppra-tender-alerts
+```
+
+Step 2: Set Up Virtual Environment
+
+Create a virtual environment to isolate project dependencies:
+
+```bash
+python -m venv venv
+```
+
+Activate the virtual environment:
+
+- On Linux/Mac:
+  ```bash
+  source venv/bin/activate
+  ```
+
+- On Windows:
+  ```bash
+  venv\Scripts\activate
+  ```
+
+You should see `(venv)` at the beginning of your command prompt when the virtual environment is active.
+
+Step 3: Install Dependencies
+
+Install the required Python packages from the requirements file:
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+This will install the following dependencies:
+- `requests` - HTTP library for API requests
+- `selenium` - Web scraping and browser automation
+- `python-dotenv` - Environment variable management
+- `pytest` - Testing framework
+
+Step 4: Run the Test API Script
+
+Test the connectivity to the PPRA API by running the test script:
+
+```bash
+python test/test_api.py
+```
+
+Or if you need to use `python3`:
+
+```bash
+python3 test/test_api.py
+```
+
+This script will:
+- Test connectivity to the PPRA API endpoint
+- Display the response status and details
+- Handle errors gracefully (including 405 Method Not Allowed responses)
+
+Optional: Environment Variables
+
+If you need to customize the API endpoint URL, create a `.env` file in the root directory:
+
+```bash
+PPRA_API_URL=https://ppra.gov.pk/api/tenders
+```
+
+If no `.env` file is provided, the script will use the default URL.
+
 Table of Contents
+
+Quick Start
 
 Features
 
@@ -173,6 +258,8 @@ ppra-tender-alerts/
 │  │  └─ main.jsx
 │  ├─ index.html
 │  └─ package.json
+├─ test/
+│  └─ test_api.py
 ├─ docker-compose.yml
 └─ README.md
 
