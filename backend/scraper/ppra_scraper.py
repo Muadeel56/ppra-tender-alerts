@@ -6,6 +6,10 @@ including filtering by city and extracting tender information.
 """
 
 import time
+import json
+import csv
+import os
+import re
 from typing import List, Dict, Optional
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -335,12 +339,121 @@ class PPRAScraper:
             print(f"Error verifying city filter: {str(e)}")
             return False
     
+    def _parse_tender_details(self, details_text: str) -> Dict[str, str]:
+        """
+        Parse tender details text to extract title, category, and department/owner.
+        
+        Args:
+            details_text (str): The raw tender details text from the table
+            
+        Returns:
+            Dict[str, str]: Dictionary with parsed fields (tender_title, category, department_owner)
+        """
+        result = {
+            "tender_title": "",
+            "category": "",
+            "department_owner": ""
+        }
+        
+        if not details_text:
+            return result
+        
+        # Try to parse structured data from details
+        # Common patterns might include:
+        # - Title on first line
+        # - Category: X or Category - X
+        # - Department/Owner: X or Dept: X
+        
+        lines = [line.strip() for line in details_text.split('\n') if line.strip()]
+        
+        if lines:
+            # First line is often the title
+            result["tender_title"] = lines[0]
+        
+        # Look for category patterns
+        for line in lines:
+            line_lower = line.lower()
+            if "category" in line_lower:
+                # Extract category after "category:" or "category -"
+                parts = line.split(":", 1) if ":" in line else line.split("-", 1)
+                if len(parts) > 1:
+                    result["category"] = parts[-1].strip()
+                else:
+                    result["category"] = line.replace("Category", "").replace("category", "").strip()
+        
+        # Look for department/owner patterns
+        for line in lines:
+            line_lower = line.lower()
+            if any(keyword in line_lower for keyword in ["department", "dept", "owner", "organization", "org"]):
+                # Extract department/owner after keywords
+                for keyword in ["department:", "dept:", "owner:", "organization:", "org:"]:
+                    if keyword in line_lower:
+                        parts = line.split(":", 1)
+                        if len(parts) > 1:
+                            result["department_owner"] = parts[-1].strip()
+                            break
+                if not result["department_owner"]:
+                    # Try splitting by dash or other separators
+                    parts = line.split("-", 1) if "-" in line else [line]
+                    if len(parts) > 1:
+                        result["department_owner"] = parts[-1].strip()
+        
+        # If category or department not found, try to infer from remaining lines
+        if not result["category"] and len(lines) > 1:
+            # Category might be in second or third line
+            for i in range(1, min(3, len(lines))):
+                if lines[i] and not result["category"]:
+                    result["category"] = lines[i]
+                    break
+        
+        if not result["department_owner"] and len(lines) > 2:
+            # Department might be in later lines
+            for i in range(2, len(lines)):
+                if lines[i] and not result["department_owner"]:
+                    result["department_owner"] = lines[i]
+                    break
+        
+        return result
+    
+    def _extract_tse_from_tender_number(self, tender_number: str) -> str:
+        """
+        Extract TSE (Tender Serial Number) from tender number if available.
+        
+        Args:
+            tender_number (str): The tender number string
+            
+        Returns:
+            str: TSE if found, otherwise empty string
+        """
+        if not tender_number:
+            return ""
+        
+        # TSE might be part of the tender number or a separate identifier
+        # Common patterns: TSE-XXX, TSE XXX, or embedded in tender number
+        
+        # Look for TSE pattern
+        tse_pattern = r'TSE[:\s-]?(\w+)'
+        match = re.search(tse_pattern, tender_number, re.IGNORECASE)
+        if match:
+            return match.group(1) if match.lastindex else match.group(0)
+        
+        # If no explicit TSE found, return empty (TSE might be same as tender number)
+        return ""
+    
     def extract_tender_data(self) -> List[Dict]:
         """
-        Extract tender data from the filtered table.
+        Extract tender data from the filtered table with all required fields.
         
         Returns:
-            List[Dict]: List of dictionaries containing tender information
+            List[Dict]: List of dictionaries containing tender information with standardized fields:
+                - tender_title: str
+                - category: str
+                - department_owner: str
+                - start_date: str
+                - closing_date: str
+                - tender_number: str
+                - tse: str
+                - pdf_links: List[str]
         """
         tenders = []
         
@@ -388,26 +501,44 @@ class PPRAScraper:
                     if len(cells) < 5:  # Expected columns: Sr No, Tender No, Tender Details, Downloads, Advertisement Date, Closing Date
                         continue
                     
-                    tender_data = {
-                        "sr_no": cells[0].text.strip() if len(cells) > 0 else "",
-                        "tender_no": cells[1].text.strip() if len(cells) > 1 else "",
-                        "tender_details": cells[2].text.strip() if len(cells) > 2 else "",
-                        "downloads": [],
-                        "advertisement_date": cells[4].text.strip() if len(cells) > 4 else "",
-                        "closing_date": cells[5].text.strip() if len(cells) > 5 else "",
-                    }
+                    # Get basic fields
+                    tender_number = cells[1].text.strip() if len(cells) > 1 else ""
+                    tender_details_text = cells[2].text.strip() if len(cells) > 2 else ""
+                    advertisement_date = cells[4].text.strip() if len(cells) > 4 else ""
+                    closing_date = cells[5].text.strip() if len(cells) > 5 else ""
                     
-                    # Extract download links if present
+                    # Only process if we have at least a tender number
+                    if not tender_number:
+                        continue
+                    
+                    # Parse tender details to extract title, category, department/owner
+                    parsed_details = self._parse_tender_details(tender_details_text)
+                    
+                    # Extract TSE from tender number
+                    tse = self._extract_tse_from_tender_number(tender_number)
+                    
+                    # Extract PDF/download links
+                    pdf_links = []
                     if len(cells) > 3:
                         download_links = cells[3].find_elements(By.CSS_SELECTOR, "a")
                         for link in download_links:
                             href = link.get_attribute("href")
                             if href:
-                                tender_data["downloads"].append(href)
+                                pdf_links.append(href)
                     
-                    # Only add if we have at least a tender number
-                    if tender_data["tender_no"]:
-                        tenders.append(tender_data)
+                    # Build standardized tender data structure
+                    tender_data = {
+                        "tender_title": parsed_details["tender_title"] or tender_details_text.split('\n')[0] if tender_details_text else "",
+                        "category": parsed_details["category"],
+                        "department_owner": parsed_details["department_owner"],
+                        "start_date": advertisement_date,
+                        "closing_date": closing_date,
+                        "tender_number": tender_number,
+                        "tse": tse,
+                        "pdf_links": pdf_links
+                    }
+                    
+                    tenders.append(tender_data)
                         
                 except Exception as e:
                     print(f"Error extracting data from row: {str(e)}")
@@ -418,6 +549,81 @@ class PPRAScraper:
         except (TimeoutException, NoSuchElementException) as e:
             print(f"Error extracting tender data: {str(e)}")
             return []
+    
+    def export_to_json(self, tenders: List[Dict], filepath: str) -> bool:
+        """
+        Export tender data to JSON file.
+        
+        Args:
+            tenders (List[Dict]): List of tender dictionaries to export
+            filepath (str): Path to the output JSON file
+            
+        Returns:
+            bool: True if export was successful, False otherwise
+        """
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else '.', exist_ok=True)
+            
+            # Write JSON file
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(tenders, f, indent=2, ensure_ascii=False)
+            
+            print(f"Successfully exported {len(tenders)} tenders to {filepath}")
+            return True
+            
+        except Exception as e:
+            print(f"Error exporting to JSON: {str(e)}")
+            return False
+    
+    def export_to_csv(self, tenders: List[Dict], filepath: str) -> bool:
+        """
+        Export tender data to CSV file.
+        
+        Args:
+            tenders (List[Dict]): List of tender dictionaries to export
+            filepath (str): Path to the output CSV file
+            
+        Returns:
+            bool: True if export was successful, False otherwise
+        """
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else '.', exist_ok=True)
+            
+            # Define CSV columns based on standardized structure
+            fieldnames = [
+                "tender_title",
+                "category",
+                "department_owner",
+                "start_date",
+                "closing_date",
+                "tender_number",
+                "tse",
+                "pdf_links"
+            ]
+            
+            # Write CSV file (even if empty, create file with headers)
+            with open(filepath, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for tender in tenders:
+                    # Convert pdf_links list to string for CSV
+                    row = tender.copy()
+                    if "pdf_links" in row and isinstance(row["pdf_links"], list):
+                        row["pdf_links"] = "; ".join(row["pdf_links"]) if row["pdf_links"] else ""
+                    writer.writerow(row)
+            
+            if tenders:
+                print(f"Successfully exported {len(tenders)} tenders to {filepath}")
+            else:
+                print(f"Created empty CSV file with headers at {filepath}")
+            return True
+            
+        except Exception as e:
+            print(f"Error exporting to CSV: {str(e)}")
+            return False
     
     def scrape_chakwal_tenders(self) -> List[Dict]:
         """
