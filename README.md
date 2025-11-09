@@ -224,6 +224,13 @@ TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
 TWILIO_WHATSAPP_TO=whatsapp:+1234567890
 
+# Gmail SMTP Email (optional)
+# Generate App Password from https://myaccount.google.com/apppasswords
+GMAIL_SMTP_USER=yourname@gmail.com
+GMAIL_SMTP_PASSWORD=your_16_character_app_password
+GMAIL_SMTP_FROM=yourname@gmail.com  # Optional, defaults to GMAIL_SMTP_USER
+GMAIL_SMTP_TO=recipient@gmail.com  # Optional, for testing
+
 Usage
 Backend
 
@@ -318,15 +325,89 @@ If successful, you should receive a test message on WhatsApp. If you encounter e
 - Phone numbers are in the correct format with `whatsapp:` prefix
 - Your Twilio account has sufficient credits
 
+Gmail SMTP Email Configuration
+
+This project supports email notifications via Gmail SMTP with App Password authentication. Follow these steps to set it up:
+
+Step 1: Enable 2-Step Verification
+
+1. Go to your Google Account settings: https://myaccount.google.com/
+2. Navigate to "Security" section
+3. Under "Signing in to Google", enable "2-Step Verification" if not already enabled
+4. Follow the prompts to complete the setup (you'll need a phone number)
+
+Step 2: Generate Gmail App Password
+
+1. Go to your Google Account settings: https://myaccount.google.com/
+2. Navigate to "Security" section
+3. Under "Signing in to Google", find "2-Step Verification" and click on it
+4. Scroll down to find "App passwords" (you may need to search for it)
+5. Click on "App passwords"
+6. Select "Mail" as the app and "Other (Custom name)" as the device
+7. Enter a name like "PPRA Tender Alerts" and click "Generate"
+8. Google will display a 16-character password (e.g., `abcd efgh ijkl mnop`)
+9. **Copy this password immediately** - you won't be able to see it again
+10. Remove spaces from the password when adding it to your `.env` file
+
+**Important:** 
+- You cannot use your regular Gmail password for SMTP
+- App Passwords are required when 2-Step Verification is enabled
+- Each App Password is 16 characters (without spaces)
+
+Step 3: Configure Environment Variables
+
+1. Edit your `.env` file in the project root and add your Gmail SMTP credentials:
+   ```bash
+   GMAIL_SMTP_USER=yourname@gmail.com
+   GMAIL_SMTP_PASSWORD=abcdefghijklmnop  # Your 16-character App Password (no spaces)
+   GMAIL_SMTP_FROM=yourname@gmail.com  # Optional, defaults to GMAIL_SMTP_USER
+   GMAIL_SMTP_TO=recipient@gmail.com  # Optional, for testing purposes
+   ```
+
+   **Important:**
+   - Use your full Gmail address for `GMAIL_SMTP_USER`
+   - Use the 16-character App Password (without spaces) for `GMAIL_SMTP_PASSWORD`
+   - `GMAIL_SMTP_FROM` is optional and defaults to `GMAIL_SMTP_USER`
+   - `GMAIL_SMTP_TO` is optional and only needed for testing
+
+Step 4: Test Email Notifications
+
+Run the test script to verify the integration:
+
+```bash
+python tests/test_email_notification.py
+```
+
+Or if you need to use `python3`:
+
+```bash
+python3 tests/test_email_notification.py
+```
+
+The script will:
+- Check that all required environment variables are set
+- Initialize the email notifier
+- Send a test email to your configured email address
+- Display success/error messages
+
+If successful, you should receive a test email. If you encounter errors, check:
+- Your Gmail App Password is correct (16 characters, no spaces)
+- 2-Step Verification is enabled on your Google account
+- The recipient email address is correct
+- Check your spam/junk folder
+- Your internet connection is working
+- You're using an App Password, not your regular Gmail password
+
 Project Structure
 ppra-tender-alerts/
 ├─ scripts/           # Python scripts (fetch_tenders.py, etc.)
 ├─ data/              # JSON or DB storage
 ├─ tests/             # Test scripts
 │  ├─ test_whatsapp_notification.py  # WhatsApp notification test
+│  ├─ test_email_notification.py    # Email notification test
 ├─ backend/
 │  ├─ scraper/
-│  │  ├─ notifications.py    # WhatsApp notifications via Twilio
+│  │  ├─ notifications.py    # WhatsApp and Email notifications
 │  │  ├─ ppra_scraper.py
 │  │  └─ tender_storage.py
 │  ├─ ppra_tender_alerts/
