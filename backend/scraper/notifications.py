@@ -1,11 +1,14 @@
 """
-WhatsApp Notifications Module
+Notifications Module
 
-This module provides functionality to send WhatsApp messages via Twilio sandbox,
-including error handling and environment variable management.
+This module provides functionality to send notifications via WhatsApp (Twilio sandbox)
+and Email (Gmail SMTP), including error handling and environment variable management.
 """
 
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from typing import Optional
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioException, TwilioRestException
@@ -179,4 +182,187 @@ class WhatsAppNotifier:
         message = "\n".join(message_parts)
         
         return self.send_message(to_number, message)
+
+
+class EmailNotifier:
+    """
+    Email notification sender using Gmail SMTP.
+    
+    Provides methods to send email messages via Gmail SMTP with App Password authentication.
+    Requires Gmail SMTP credentials to be set in environment variables.
+    """
+    
+    def __init__(
+        self,
+        smtp_user: Optional[str] = None,
+        smtp_password: Optional[str] = None,
+        smtp_from: Optional[str] = None
+    ):
+        """
+        Initialize the email notifier with Gmail SMTP credentials.
+        
+        Args:
+            smtp_user (Optional[str]): Gmail address. If None, reads from GMAIL_SMTP_USER env var.
+            smtp_password (Optional[str]): Gmail App Password. If None, reads from GMAIL_SMTP_PASSWORD env var.
+            smtp_from (Optional[str]): Sender email address. If None, reads from GMAIL_SMTP_FROM env var,
+                                      or defaults to smtp_user.
+        
+        Raises:
+            ValueError: If required credentials are missing
+        """
+        # Get credentials from parameters or environment variables
+        self.smtp_user = smtp_user or os.getenv('GMAIL_SMTP_USER')
+        self.smtp_password = smtp_password or os.getenv('GMAIL_SMTP_PASSWORD')
+        
+        # Validate required credentials
+        if not self.smtp_user:
+            raise ValueError("GMAIL_SMTP_USER is required. Set it in .env file or pass as parameter.")
+        if not self.smtp_password:
+            raise ValueError("GMAIL_SMTP_PASSWORD is required. Set it in .env file or pass as parameter.")
+        
+        # Set sender email (defaults to smtp_user if not provided)
+        self.smtp_from = smtp_from or os.getenv('GMAIL_SMTP_FROM') or self.smtp_user
+        
+        # Gmail SMTP settings
+        self.smtp_server = 'smtp.gmail.com'
+        self.smtp_port = 587
+    
+    def send_email(
+        self,
+        to_email: str,
+        subject: str,
+        body: str,
+        is_html: bool = False
+    ) -> dict:
+        """
+        Send an email via Gmail SMTP.
+        
+        Args:
+            to_email (str): Recipient email address
+            subject (str): Email subject line
+            body (str): Email body content (plain text or HTML)
+            is_html (bool): If True, body is treated as HTML; otherwise as plain text
+        
+        Returns:
+            dict: Dictionary with success status and message details:
+                - success (bool): True if email was sent successfully
+                - error (str): Error message if failed, None otherwise
+        
+        Raises:
+            ValueError: If to_email, subject, or body is empty
+        """
+        if not to_email:
+            raise ValueError("to_email cannot be empty")
+        if not subject:
+            raise ValueError("subject cannot be empty")
+        if not body:
+            raise ValueError("body cannot be empty")
+        
+        try:
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['From'] = self.smtp_from
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            
+            # Add body to email
+            if is_html:
+                msg.attach(MIMEText(body, 'html'))
+            else:
+                msg.attach(MIMEText(body, 'plain'))
+            
+            # Connect to Gmail SMTP server and send email
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()  # Enable TLS encryption
+                server.login(self.smtp_user, self.smtp_password)
+                server.send_message(msg)
+            
+            return {
+                'success': True,
+                'error': None
+            }
+            
+        except smtplib.SMTPAuthenticationError as e:
+            return {
+                'success': False,
+                'error': f"SMTP authentication error: {str(e)}. Check your Gmail App Password."
+            }
+        except smtplib.SMTPRecipientsRefused as e:
+            return {
+                'success': False,
+                'error': f"SMTP recipient refused: {str(e)}. Check the recipient email address."
+            }
+        except smtplib.SMTPServerDisconnected as e:
+            return {
+                'success': False,
+                'error': f"SMTP server disconnected: {str(e)}. Check your internet connection."
+            }
+        except smtplib.SMTPException as e:
+            return {
+                'success': False,
+                'error': f"SMTP error: {str(e)}"
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f"Unexpected error: {str(e)}"
+            }
+    
+    def send_tender_alert(
+        self,
+        to_email: str,
+        tender_data: dict
+    ) -> dict:
+        """
+        Send a formatted tender alert email.
+        
+        Args:
+            to_email (str): Recipient email address
+            tender_data (dict): Dictionary containing tender information with keys:
+                - tender_title (str)
+                - category (str, optional)
+                - department_owner (str, optional)
+                - closing_date (str, optional)
+                - tender_number (str, optional)
+                - pdf_links (list, optional)
+        
+        Returns:
+            dict: Result from send_email() method
+        """
+        # Format tender alert email
+        subject = "🔔 New Tender Alert"
+        
+        # Build HTML email body
+        html_parts = ["<html><body>"]
+        html_parts.append("<h2>🔔 New Tender Alert</h2>")
+        html_parts.append("<div style='font-family: Arial, sans-serif; line-height: 1.6;'>")
+        
+        if tender_data.get('tender_title'):
+            html_parts.append(f"<p><strong>Title:</strong> {tender_data['tender_title']}</p>")
+        
+        if tender_data.get('tender_number'):
+            html_parts.append(f"<p><strong>Tender No:</strong> {tender_data['tender_number']}</p>")
+        
+        if tender_data.get('category'):
+            html_parts.append(f"<p><strong>Category:</strong> {tender_data['category']}</p>")
+        
+        if tender_data.get('department_owner'):
+            html_parts.append(f"<p><strong>Department:</strong> {tender_data['department_owner']}</p>")
+        
+        if tender_data.get('closing_date'):
+            html_parts.append(f"<p><strong>Closing Date:</strong> {tender_data['closing_date']}</p>")
+        
+        if tender_data.get('pdf_links') and len(tender_data['pdf_links']) > 0:
+            html_parts.append(f"<p><strong>PDF Links ({len(tender_data['pdf_links'])} available):</strong></p>")
+            html_parts.append("<ul>")
+            for link in tender_data['pdf_links'][:5]:  # Limit to first 5 links
+                html_parts.append(f"<li><a href='{link}'>{link}</a></li>")
+            html_parts.append("</ul>")
+        
+        html_parts.append("</div>")
+        html_parts.append("</body></html>")
+        
+        html_body = "\n".join(html_parts)
+        
+        return self.send_email(to_email, subject, html_body, is_html=True)
 
