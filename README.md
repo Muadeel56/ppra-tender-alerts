@@ -77,13 +77,15 @@ This script will:
 
 Optional: Environment Variables
 
-If you need to customize the API endpoint URL, create a `.env` file in the root directory:
+If you need to customize the API endpoint URL or configure WhatsApp notifications, create a `.env` file in the root directory:
 
 ```bash
 PPRA_API_URL=https://ppra.gov.pk/api/tenders
 ```
 
 If no `.env` file is provided, the script will use the default URL.
+
+For WhatsApp notifications setup, see the [Twilio WhatsApp Configuration](#twilio-whatsapp-configuration) section below.
 
 Table of Contents
 
@@ -215,10 +217,12 @@ DB_PORT=5432
 # PPRA API
 PPRA_API_KEY=your_api_key
 
-# Twilio (optional)
-TWILIO_ACCOUNT_SID=your_sid
+# Twilio WhatsApp Sandbox (optional)
+# Get these from https://console.twilio.com/
+TWILIO_ACCOUNT_SID=your_account_sid
 TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_PHONE_NUMBER=your_twilio_number
+TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+TWILIO_WHATSAPP_TO=whatsapp:+1234567890
 
 Usage
 Backend
@@ -241,12 +245,90 @@ npm run dev
 
 Access the application at http://localhost:5173 (Vite default port).
 
+Twilio WhatsApp Configuration
+
+This project supports WhatsApp notifications via Twilio's WhatsApp sandbox. Follow these steps to set it up:
+
+Step 1: Create a Twilio Account
+
+1. Sign up for a free Twilio account at https://www.twilio.com/try-twilio
+2. Verify your email and phone number
+3. Navigate to the Twilio Console: https://console.twilio.com/
+
+Step 2: Get Your Twilio Credentials
+
+1. In the Twilio Console, find your Account SID and Auth Token on the dashboard
+2. Copy these values - you'll need them for your `.env` file
+
+Step 3: Set Up WhatsApp Sandbox
+
+1. In the Twilio Console, navigate to "Messaging" > "Try it out" > "Send a WhatsApp message"
+2. You'll see the sandbox number (default: `+14155238886`) and a join code
+3. The join code is a word like "join <word>" that recipients need to send to the sandbox number
+
+Step 4: Join the Sandbox (for testing)
+
+1. Open WhatsApp on your phone
+2. Send the join code (e.g., "join example-word") to the Twilio sandbox number: `+1 415 523 8886`
+3. You should receive a confirmation message that you've joined the sandbox
+
+Step 5: Configure Environment Variables
+
+1. Copy `.env.example` to `.env` in the project root:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and add your Twilio credentials:
+   ```bash
+   TWILIO_ACCOUNT_SID=your_account_sid_here
+   TWILIO_AUTH_TOKEN=your_auth_token_here
+   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+   TWILIO_WHATSAPP_TO=whatsapp:+1234567890  # Replace with your WhatsApp number
+   ```
+
+   **Important:** 
+   - Use the `whatsapp:` prefix for both FROM and TO numbers
+   - Replace `+1234567890` with your actual WhatsApp number in E.164 format (country code + number)
+   - The recipient number must have joined the sandbox before receiving messages
+
+Step 6: Test WhatsApp Notifications
+
+Run the test script to verify the integration:
+
+```bash
+python tests/test_whatsapp_notification.py
+```
+
+Or if you need to use `python3`:
+
+```bash
+python3 tests/test_whatsapp_notification.py
+```
+
+The script will:
+- Check that all required environment variables are set
+- Initialize the WhatsApp notifier
+- Send a test message to your configured WhatsApp number
+- Display success/error messages
+
+If successful, you should receive a test message on WhatsApp. If you encounter errors, check:
+- Your Twilio credentials are correct
+- The recipient has joined the sandbox
+- Phone numbers are in the correct format with `whatsapp:` prefix
+- Your Twilio account has sufficient credits
+
 Project Structure
 ppra-tender-alerts/
 ├─ scripts/           # Python scripts (fetch_tenders.py, etc.)
 ├─ data/              # JSON or DB storage
 ├─ tests/             # Test scripts
+│  ├─ test_whatsapp_notification.py  # WhatsApp notification test
 ├─ backend/
+│  ├─ scraper/
+│  │  ├─ notifications.py    # WhatsApp notifications via Twilio
+│  │  ├─ ppra_scraper.py
+│  │  └─ tender_storage.py
 │  ├─ ppra_tender_alerts/
 │  ├─ tenders/
 │  ├─ users/
