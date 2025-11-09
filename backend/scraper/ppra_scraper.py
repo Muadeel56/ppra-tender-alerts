@@ -19,6 +19,12 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementNotInteractableException
 
 from scraper.browser_config import create_headless_chrome_driver
+from scraper.tender_storage import (
+    load_tenders,
+    save_tenders,
+    merge_tenders,
+    get_tenders_filepath
+)
 
 
 class PPRAScraper:
@@ -624,6 +630,48 @@ class PPRAScraper:
         except Exception as e:
             print(f"Error exporting to CSV: {str(e)}")
             return False
+    
+    def save_tenders_locally(self, tenders: List[Dict], filepath: Optional[str] = None) -> int:
+        """
+        Save scraped tenders to local storage (data/tenders.json) with duplicate detection.
+        
+        This method loads existing tenders from the storage file, merges new tenders
+        while skipping duplicates (based on tender_number), and saves the updated list.
+        
+        Args:
+            tenders (List[Dict]): List of new tender dictionaries to save
+            filepath (Optional[str]): Path to the tenders.json file. If None, uses default
+                                      location (data/tenders.json relative to project root).
+        
+        Returns:
+            int: Number of new tenders added (excluding duplicates). Returns -1 on error.
+        """
+        try:
+            # Get filepath (default to data/tenders.json if not provided)
+            if filepath is None:
+                filepath = get_tenders_filepath()
+            
+            # Load existing tenders
+            existing_tenders = load_tenders(filepath)
+            
+            # Merge new tenders with existing ones (removing duplicates)
+            merged_tenders, new_count = merge_tenders(existing_tenders, tenders)
+            
+            # Save merged tenders
+            if save_tenders(merged_tenders, filepath):
+                total_count = len(merged_tenders)
+                print(f"Successfully saved tenders to {filepath}")
+                print(f"  - Total tenders in storage: {total_count}")
+                print(f"  - New tenders added: {new_count}")
+                print(f"  - Duplicates skipped: {len(tenders) - new_count}")
+                return new_count
+            else:
+                print(f"Failed to save tenders to {filepath}")
+                return -1
+                
+        except Exception as e:
+            print(f"Error saving tenders locally: {str(e)}")
+            return -1
     
     def scrape_chakwal_tenders(self) -> List[Dict]:
         """
