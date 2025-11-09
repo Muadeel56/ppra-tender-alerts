@@ -89,3 +89,6 @@ build/
 .dockerignore
 docker-compose.override.yml
 
+# Test output data
+data/*.json
+
