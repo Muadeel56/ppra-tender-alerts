@@ -15,3 +15,22 @@ pytest>=7.4.0
 
 # WhatsApp notifications via Twilio
 twilio>=9.0.0
+
+
+# PPRA Tender Alerts - Initial Dependencies
+
+# HTTP library for API requests
+requests>=2.31.0
+
+# Web scraping and browser automation
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Testing framework
+pytest>=7.4.0
+
+# WhatsApp notifications via Twilio
+twilio>=9.0.0
