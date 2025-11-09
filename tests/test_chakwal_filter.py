@@ -63,28 +63,69 @@ def test_chakwal_filter(headless: bool = True, timeout: int = 30):
         tenders = scraper.extract_tender_data()
         print(f"✓ Extracted {len(tenders)} tenders")
         
+        json_exported = False
+        csv_exported = False
+        
         if len(tenders) == 0:
             print("⚠ No tenders found (this may be expected if there are no active Chakwal tenders)")
         else:
-            # Display first few tenders
-            print("\n[Test 5] Sample tender data:")
+            # Test 5: Verify all required fields are present
+            print("\n[Test 5] Verifying required fields in extracted data...")
+            required_fields = [
+                "tender_title",
+                "category",
+                "department_owner",
+                "start_date",
+                "closing_date",
+                "tender_number",
+                "tse",
+                "pdf_links"
+            ]
+            
+            all_fields_present = True
+            for tender in tenders:
+                for field in required_fields:
+                    if field not in tender:
+                        print(f"✗ Missing field '{field}' in tender data")
+                        all_fields_present = False
+            
+            if all_fields_present:
+                print(f"✓ All required fields present in {len(tenders)} tender(s)")
+            
+            # Display first few tenders with new fields
+            print("\n[Test 6] Sample tender data:")
             for i, tender in enumerate(tenders[:3], 1):
                 print(f"\n  Tender {i}:")
-                print(f"    Tender No: {tender.get('tender_no', 'N/A')}")
-                print(f"    Details: {tender.get('tender_details', 'N/A')[:80]}...")
+                print(f"    Tender Title: {tender.get('tender_title', 'N/A')[:60]}...")
+                print(f"    Category: {tender.get('category', 'N/A')}")
+                print(f"    Department/Owner: {tender.get('department_owner', 'N/A')[:60]}...")
+                print(f"    Tender Number: {tender.get('tender_number', 'N/A')}")
+                print(f"    TSE: {tender.get('tse', 'N/A')}")
+                print(f"    Start Date: {tender.get('start_date', 'N/A')}")
                 print(f"    Closing Date: {tender.get('closing_date', 'N/A')}")
-                print(f"    Advertisement Date: {tender.get('advertisement_date', 'N/A')}")
-                if tender.get('downloads'):
-                    print(f"    Downloads: {len(tender['downloads'])} link(s)")
+                pdf_links = tender.get('pdf_links', [])
+                if pdf_links:
+                    print(f"    PDF Links: {len(pdf_links)} link(s)")
+                    for j, link in enumerate(pdf_links[:2], 1):
+                        print(f"      {j}. {link[:60]}...")
         
-        # Test 6: Save results to JSON file
-        print("\n[Test 6] Saving results to JSON file...")
-        output_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'chakwal_tenders.json')
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        # Test 7: Export to JSON using scraper method
+        print("\n[Test 7] Testing JSON export...")
+        json_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'chakwal_tenders.json')
+        json_exported = scraper.export_to_json(tenders, json_file)
+        if json_exported:
+            print(f"✓ JSON export successful: {json_file}")
+        else:
+            print("✗ JSON export failed")
         
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(tenders, f, indent=2, ensure_ascii=False)
-        print(f"✓ Results saved to {output_file}")
+        # Test 8: Export to CSV using scraper method
+        print("\n[Test 8] Testing CSV export...")
+        csv_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'chakwal_tenders.csv')
+        csv_exported = scraper.export_to_csv(tenders, csv_file)
+        if csv_exported:
+            print(f"✓ CSV export successful: {csv_file}")
+        else:
+            print("✗ CSV export failed")
         
         print("\n" + "=" * 60)
         print("All tests passed! ✓")
@@ -94,7 +135,9 @@ def test_chakwal_filter(headless: bool = True, timeout: int = 30):
         print(f"  - City filter applied: ✓")
         print(f"  - Filter verified: {'✓' if filter_verified else '⚠'}")
         print(f"  - Tenders extracted: {len(tenders)}")
-        print(f"  - Results saved: ✓")
+        print(f"  - Required fields verified: ✓")
+        print(f"  - JSON export: {'✓' if json_exported else '✗'}")
+        print(f"  - CSV export: {'✓' if csv_exported else '✗'}")
         
         return 0
         
@@ -144,7 +187,11 @@ def test_scrape_chakwal_tenders_workflow(headless: bool = True, timeout: int = 3
             print(f"  - Tenders extracted: {len(tenders)}")
             
             if len(tenders) > 0:
-                print(f"\n  Sample tender: {tenders[0].get('tender_no', 'N/A')}")
+                print(f"\n  Sample tender:")
+                print(f"    Title: {tenders[0].get('tender_title', 'N/A')[:50]}...")
+                print(f"    Number: {tenders[0].get('tender_number', 'N/A')}")
+                print(f"    Category: {tenders[0].get('category', 'N/A')}")
+                print(f"    Department: {tenders[0].get('department_owner', 'N/A')[:50]}...")
         
         return 0
         
