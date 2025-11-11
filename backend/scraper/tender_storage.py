@@ -7,6 +7,7 @@ including duplicate detection and merging of new tenders with existing ones.
 
 import json
 import os
+import re
 from typing import List, Dict, Optional, Tuple
 
 
@@ -68,11 +69,50 @@ def save_tenders(tenders: List[Dict], filepath: str) -> bool:
         return False
 
 
+def normalize_tender_number(tender_number: str) -> str:
+    """
+    Normalize a tender number for comparison.
+    
+    Handles malformed tender numbers by:
+    - Stripping newlines, carriage returns, and extra whitespace
+    - Removing common suffixes like "View Invoice"
+    - Converting to lowercase
+    - Extracting just the core tender number (e.g., "TS681599E" from "TS681599E\\nView Invoice")
+    
+    Args:
+        tender_number (str): Raw tender number string
+        
+    Returns:
+        str: Normalized tender number, or empty string if input is invalid
+    """
+    if not tender_number:
+        return ""
+    
+    # Convert to string and strip whitespace
+    normalized = str(tender_number).strip()
+    
+    # Remove newlines, carriage returns, and normalize whitespace
+    normalized = re.sub(r'[\r\n]+', ' ', normalized)
+    normalized = re.sub(r'\s+', ' ', normalized)
+    normalized = normalized.strip()
+    
+    # Remove common suffixes that appear in scraped data
+    # Examples: "View Invoice", "View", etc.
+    normalized = re.sub(r'\s*(view\s*invoice|view).*$', '', normalized, flags=re.IGNORECASE)
+    normalized = normalized.strip()
+    
+    # Convert to lowercase for case-insensitive comparison
+    normalized = normalized.lower()
+    
+    return normalized
+
+
 def is_duplicate(tender: Dict, existing_tenders: List[Dict]) -> bool:
     """
     Check if a tender already exists in the existing tenders list.
     
     Duplicate detection is based on tender_number field (case-insensitive comparison).
+    Handles malformed tender numbers with newlines, extra text, and whitespace.
     
     Args:
         tender (Dict): Tender dictionary to check
@@ -84,12 +124,19 @@ def is_duplicate(tender: Dict, existing_tenders: List[Dict]) -> bool:
     if not tender or 'tender_number' not in tender:
         return False
     
-    tender_number = str(tender['tender_number']).strip().lower()
+    # Normalize the tender number
+    tender_number = normalize_tender_number(tender.get('tender_number', ''))
     
+    # If normalized number is empty, cannot determine duplicate status
+    # Treat as non-duplicate to avoid false positives
+    if not tender_number:
+        return False
+    
+    # Compare with existing tenders
     for existing_tender in existing_tenders:
         if 'tender_number' in existing_tender:
-            existing_number = str(existing_tender['tender_number']).strip().lower()
-            if existing_number == tender_number:
+            existing_number = normalize_tender_number(existing_tender.get('tender_number', ''))
+            if existing_number and existing_number == tender_number:
                 return True
     
     return False

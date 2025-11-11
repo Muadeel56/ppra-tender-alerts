@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scraper.ppra_scraper import PPRAScraper
-from scraper.tender_storage import load_tenders, save_tenders, merge_tenders, get_tenders_filepath
+from scraper.tender_storage import load_tenders, save_tenders, merge_tenders, get_tenders_filepath, normalize_tender_number, is_duplicate
 from scraper.notifications import WhatsAppNotifier, EmailNotifier
 
 
@@ -164,19 +164,31 @@ class AutomatedTenderMonitor:
             print("ℹ️  No new tenders found. All scraped tenders already exist in storage.")
             return []
         
-        # Extract only the new tenders
+        # Extract only the new tenders using normalized comparison
+        # This ensures proper handling of malformed tender numbers
         new_tenders = []
-        existing_numbers = {str(t.get('tender_number', '')).strip().lower() for t in existing_tenders if t.get('tender_number')}
+        seen_normalized_numbers = set()  # Track normalized numbers to avoid duplicates in new_tenders list
         
         for tender in scraped_tenders:
-            tender_number = str(tender.get('tender_number', '')).strip().lower()
-            if tender_number and tender_number not in existing_numbers:
-                new_tenders.append(tender)
-                existing_numbers.add(tender_number)  # Avoid duplicates in new_tenders
+            # Use is_duplicate() which handles normalization properly
+            if not is_duplicate(tender, existing_tenders):
+                # Also check if we've already added this tender in this batch
+                tender_number = normalize_tender_number(tender.get('tender_number', ''))
+                if tender_number and tender_number not in seen_normalized_numbers:
+                    new_tenders.append(tender)
+                    seen_normalized_numbers.add(tender_number)
+                elif not tender_number:
+                    # Tender without a valid number - treat as new but log warning
+                    print(f"   ⚠️  Warning: Tender without valid tender_number detected: {tender.get('tender_title', 'N/A')[:50]}...")
+                    new_tenders.append(tender)
+        
+        if len(new_tenders) != new_count:
+            print(f"   ⚠️  Warning: Expected {new_count} new tenders but found {len(new_tenders)} after normalization")
         
         print(f"📋 New tenders to notify:")
         for i, tender in enumerate(new_tenders, 1):
-            print(f"   {i}. {tender.get('tender_title', 'N/A')[:50]}... (Closes: {tender.get('closing_date', 'N/A')})")
+            tender_num = normalize_tender_number(tender.get('tender_number', '')) or 'N/A'
+            print(f"   {i}. {tender.get('tender_title', 'N/A')[:50]}... (Number: {tender_num}, Closes: {tender.get('closing_date', 'N/A')})")
         print()
         
         return new_tenders
@@ -323,8 +335,20 @@ class AutomatedTenderMonitor:
             # Step 3: Send notifications
             notification_stats = self.send_notifications(new_tenders)
             
-            # Step 4: Save new tenders
+            # Step 4: Save new tenders after sending notifications
+            # We save regardless of notification success to mark tenders as "seen"
+            # This prevents re-sending the same tenders on subsequent runs
             save_success = self.save_new_tenders(new_tenders)
+            
+            # Log warning if notifications failed but we're still saving
+            total_notifications_attempted = notification_stats['whatsapp_sent'] + notification_stats['email_sent']
+            total_notifications_failed = notification_stats['whatsapp_failed'] + notification_stats['email_failed']
+            
+            if len(new_tenders) > 0 and total_notifications_failed > 0:
+                if total_notifications_attempted == 0:
+                    print("⚠️  Note: All notifications failed, but tenders are saved to prevent re-sending")
+                else:
+                    print(f"⚠️  Note: {total_notifications_failed} notification(s) failed, but tenders are saved")
             
             # Summary
             print("=" * 70)
