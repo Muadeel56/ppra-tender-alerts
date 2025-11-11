@@ -18,6 +18,42 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def get_primary_link(tender_data: dict) -> str:
+    """
+    Get the primary link from tender data.
+    
+    Args:
+        tender_data (dict): Dictionary containing tender information
+        
+    Returns:
+        str: First PDF link if available, otherwise "N/A"
+    """
+    pdf_links = tender_data.get('pdf_links', [])
+    if pdf_links and len(pdf_links) > 0:
+        return pdf_links[0]
+    return "N/A"
+
+
+def format_deliverables(tender_data: dict) -> str:
+    """
+    Format deliverables field from tender data.
+    
+    Args:
+        tender_data (dict): Dictionary containing tender information
+        
+    Returns:
+        str: Deliverables if available, otherwise "N/A"
+    """
+    deliverables = tender_data.get('deliverables')
+    if deliverables:
+        if isinstance(deliverables, str):
+            return deliverables.strip() if deliverables.strip() else "N/A"
+        elif isinstance(deliverables, list):
+            return ", ".join(str(d) for d in deliverables) if deliverables else "N/A"
+        return str(deliverables)
+    return "N/A"
+
+
 class WhatsAppNotifier:
     """
     WhatsApp notification sender using Twilio sandbox.
@@ -150,34 +186,50 @@ class WhatsAppNotifier:
                 - category (str, optional)
                 - department_owner (str, optional)
                 - closing_date (str, optional)
-                - tender_number (str, optional)
                 - pdf_links (list, optional)
+                - deliverables (str or list, optional)
         
         Returns:
             dict: Result from send_message() method
         """
-        # Format tender alert message
-        message_parts = ["🔔 *New Tender Alert*"]
+        # Format tender alert message with required fields
+        message_parts = []
         
-        if tender_data.get('tender_title'):
-            message_parts.append(f"\n*Title:* {tender_data['tender_title']}")
+        # Tender Title
+        title = tender_data.get('tender_title', '').strip()
+        if title:
+            message_parts.append(f"Tender Title: {title}")
+        else:
+            message_parts.append("Tender Title: N/A")
         
-        if tender_data.get('tender_number'):
-            message_parts.append(f"*Tender No:* {tender_data['tender_number']}")
+        # Category
+        category = tender_data.get('category', '').strip()
+        if category:
+            message_parts.append(f"Category: {category}")
+        else:
+            message_parts.append("Category: N/A")
         
-        if tender_data.get('category'):
-            message_parts.append(f"*Category:* {tender_data['category']}")
+        # Department
+        department = tender_data.get('department_owner', '').strip()
+        if department:
+            message_parts.append(f"Department: {department}")
+        else:
+            message_parts.append("Department: N/A")
         
-        if tender_data.get('department_owner'):
-            message_parts.append(f"*Department:* {tender_data['department_owner']}")
+        # Closing Date
+        closing_date = tender_data.get('closing_date', '').strip()
+        if closing_date:
+            message_parts.append(f"Closing Date: {closing_date}")
+        else:
+            message_parts.append("Closing Date: N/A")
         
-        if tender_data.get('closing_date'):
-            message_parts.append(f"*Closing Date:* {tender_data['closing_date']}")
+        # Link
+        link = get_primary_link(tender_data)
+        message_parts.append(f"Link: {link}")
         
-        if tender_data.get('pdf_links') and len(tender_data['pdf_links']) > 0:
-            message_parts.append(f"\n*PDF Links:* {len(tender_data['pdf_links'])} available")
-            for i, link in enumerate(tender_data['pdf_links'][:3], 1):  # Limit to first 3 links
-                message_parts.append(f"{i}. {link}")
+        # Deliverables
+        deliverables = format_deliverables(tender_data)
+        message_parts.append(f"Deliverables: {deliverables}")
         
         message = "\n".join(message_parts)
         
@@ -323,8 +375,8 @@ class EmailNotifier:
                 - category (str, optional)
                 - department_owner (str, optional)
                 - closing_date (str, optional)
-                - tender_number (str, optional)
                 - pdf_links (list, optional)
+                - deliverables (str or list, optional)
         
         Returns:
             dict: Result from send_email() method
@@ -332,33 +384,40 @@ class EmailNotifier:
         # Format tender alert email
         subject = "🔔 New Tender Alert"
         
-        # Build HTML email body
+        # Build HTML email body with required fields
         html_parts = ["<html><body>"]
-        html_parts.append("<h2>🔔 New Tender Alert</h2>")
-        html_parts.append("<div style='font-family: Arial, sans-serif; line-height: 1.6;'>")
+        html_parts.append("<div style='font-family: Arial, sans-serif; line-height: 1.8; max-width: 600px;'>")
+        html_parts.append("<h2 style='color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;'>🔔 New Tender Alert</h2>")
+        html_parts.append("<div style='background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-top: 20px;'>")
         
-        if tender_data.get('tender_title'):
-            html_parts.append(f"<p><strong>Title:</strong> {tender_data['tender_title']}</p>")
+        # Tender Title
+        title = tender_data.get('tender_title', '').strip()
+        html_parts.append(f"<p style='margin: 10px 0;'><strong style='color: #2c3e50;'>Tender Title:</strong> <span>{title if title else 'N/A'}</span></p>")
         
-        if tender_data.get('tender_number'):
-            html_parts.append(f"<p><strong>Tender No:</strong> {tender_data['tender_number']}</p>")
+        # Category
+        category = tender_data.get('category', '').strip()
+        html_parts.append(f"<p style='margin: 10px 0;'><strong style='color: #2c3e50;'>Category:</strong> <span>{category if category else 'N/A'}</span></p>")
         
-        if tender_data.get('category'):
-            html_parts.append(f"<p><strong>Category:</strong> {tender_data['category']}</p>")
+        # Department
+        department = tender_data.get('department_owner', '').strip()
+        html_parts.append(f"<p style='margin: 10px 0;'><strong style='color: #2c3e50;'>Department:</strong> <span>{department if department else 'N/A'}</span></p>")
         
-        if tender_data.get('department_owner'):
-            html_parts.append(f"<p><strong>Department:</strong> {tender_data['department_owner']}</p>")
+        # Closing Date
+        closing_date = tender_data.get('closing_date', '').strip()
+        html_parts.append(f"<p style='margin: 10px 0;'><strong style='color: #2c3e50;'>Closing Date:</strong> <span>{closing_date if closing_date else 'N/A'}</span></p>")
         
-        if tender_data.get('closing_date'):
-            html_parts.append(f"<p><strong>Closing Date:</strong> {tender_data['closing_date']}</p>")
+        # Link
+        link = get_primary_link(tender_data)
+        if link != "N/A":
+            html_parts.append(f"<p style='margin: 10px 0;'><strong style='color: #2c3e50;'>Link:</strong> <a href='{link}' style='color: #3498db; text-decoration: none;'>{link}</a></p>")
+        else:
+            html_parts.append(f"<p style='margin: 10px 0;'><strong style='color: #2c3e50;'>Link:</strong> <span>N/A</span></p>")
         
-        if tender_data.get('pdf_links') and len(tender_data['pdf_links']) > 0:
-            html_parts.append(f"<p><strong>PDF Links ({len(tender_data['pdf_links'])} available):</strong></p>")
-            html_parts.append("<ul>")
-            for link in tender_data['pdf_links'][:5]:  # Limit to first 5 links
-                html_parts.append(f"<li><a href='{link}'>{link}</a></li>")
-            html_parts.append("</ul>")
+        # Deliverables
+        deliverables = format_deliverables(tender_data)
+        html_parts.append(f"<p style='margin: 10px 0;'><strong style='color: #2c3e50;'>Deliverables:</strong> <span>{deliverables}</span></p>")
         
+        html_parts.append("</div>")
         html_parts.append("</div>")
         html_parts.append("</body></html>")
         
