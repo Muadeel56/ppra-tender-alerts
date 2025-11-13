@@ -165,6 +165,42 @@ class PPRAScraper:
         
         raise NoSuchElementException("Could not find city filter element")
     
+    def _get_available_cities(self) -> List[str]:
+        """
+        Get list of available cities from the dropdown.
+        
+        Returns:
+            List[str]: List of available city names
+        """
+        cities = []
+        try:
+            # Find all dropdown options
+            option_selectors = [
+                "//li[contains(@class, 'option') or contains(@class, 'item')]",
+                "//*[@role='option']",
+                "//*[@role='menuitem']",
+                "//ul//li",
+                "//div[contains(@class, 'option')]",
+            ]
+            
+            for selector in option_selectors:
+                try:
+                    options = self.driver.find_elements(By.XPATH, selector)
+                    for option in options:
+                        text = option.text.strip()
+                        if text and text.lower() not in ['select', 'all', 'none', '']:
+                            # Filter out non-city options
+                            if len(text) > 2 and not text.lower().startswith(('select', 'choose', 'filter')):
+                                cities.append(text)
+                    if cities:
+                        break
+                except:
+                    continue
+        except:
+            pass
+        
+        return list(set(cities))  # Remove duplicates
+    
     def apply_city_filter(self, city_name: str = "Chakwal") -> bool:
         """
         Apply city filter to show only tenders from the specified city.
@@ -190,34 +226,77 @@ class PPRAScraper:
             # Wait for dropdown options to appear and find the city option
             # The dropdown might be a custom component, so we need to search for the city name
             city_option = None
+            city_name_lower = city_name.lower().strip()
             
-            # Strategy 1: Try to find the city option by exact or partial text match
-            city_option_selectors = [
-                f"//*[normalize-space(text())='{city_name}']",
-                f"//*[contains(text(), '{city_name}')]",
-                f"//li[contains(text(), '{city_name}')]",
-                f"//*[@role='option' and contains(text(), '{city_name}')]",
-                f"//*[@role='menuitem' and contains(text(), '{city_name}')]",
-            ]
+            # Strategy 1: Get all available options and match in Python (most reliable)
+            try:
+                available_cities = self._get_available_cities()
+                if available_cities:
+                    # Find matching city (case-insensitive)
+                    matching_city = None
+                    for available_city in available_cities:
+                        if available_city.lower().strip() == city_name_lower:
+                            matching_city = available_city
+                            break
+                        elif city_name_lower in available_city.lower() or available_city.lower() in city_name_lower:
+                            # Partial match - use this if no exact match found
+                            if matching_city is None:
+                                matching_city = available_city
+                    
+                    if matching_city:
+                        # Find the element with this exact text
+                        city_option_selectors = [
+                            f"//*[normalize-space(text())='{matching_city}']",
+                            f"//*[contains(text(), '{matching_city}')]",
+                            f"//li[contains(text(), '{matching_city}')]",
+                            f"//*[@role='option' and contains(text(), '{matching_city}')]",
+                            f"//*[@role='menuitem' and contains(text(), '{matching_city}')]",
+                        ]
+                        
+                        for selector in city_option_selectors:
+                            try:
+                                city_option = self.driver.find_element(By.XPATH, selector)
+                                if city_option.is_displayed():
+                                    if matching_city != city_name:
+                                        print(f"  ℹ️  Found similar city: '{matching_city}' (requested: '{city_name}')")
+                                    break
+                            except (NoSuchElementException, ElementNotInteractableException):
+                                continue
+            except Exception:
+                pass
             
-            for selector in city_option_selectors:
-                try:
-                    city_option = self.wait.until(
-                        EC.element_to_be_clickable((By.XPATH, selector))
-                    )
-                    # Verify it's actually visible (not hidden)
-                    if city_option.is_displayed():
-                        break
-                    else:
-                        city_option = None
-                except (TimeoutException, NoSuchElementException):
-                    continue
+            # Strategy 2: Try case-insensitive XPath matching (fallback)
+            if city_option is None:
+                city_option_selectors = [
+                    f"//*[normalize-space(text())='{city_name}']",
+                    f"//*[contains(text(), '{city_name}')]",
+                    f"//li[contains(text(), '{city_name}')]",
+                    f"//*[@role='option' and contains(text(), '{city_name}')]",
+                    f"//*[@role='menuitem' and contains(text(), '{city_name}')]",
+                ]
+                
+                for selector in city_option_selectors:
+                    try:
+                        city_option = self.wait.until(
+                            EC.element_to_be_clickable((By.XPATH, selector))
+                        )
+                        # Verify it's actually visible (not hidden)
+                        if city_option.is_displayed():
+                            break
+                        else:
+                            city_option = None
+                    except (TimeoutException, NoSuchElementException):
+                        continue
             
             if city_option is None:
-                # Strategy 2: Try typing to filter/search options (for searchable dropdowns)
+                # Strategy 3: Try typing to filter/search options (for searchable dropdowns)
                 try:
+                    # Clear any existing text first
+                    city_filter.send_keys(Keys.CONTROL + "a")
+                    city_filter.send_keys(Keys.DELETE)
+                    time.sleep(0.3)
                     city_filter.send_keys(city_name)
-                    time.sleep(1)
+                    time.sleep(1.5)  # Wait for filtered results
                     
                     # Try finding the option again after typing
                     for selector in city_option_selectors:
@@ -231,7 +310,14 @@ class PPRAScraper:
                     pass
             
             if city_option is None:
-                raise NoSuchElementException(f"Could not find city option: {city_name}")
+                # Strategy 4: Last attempt - List available cities for debugging
+                available_cities = self._get_available_cities()
+                error_msg = f"Could not find city option: {city_name}"
+                if available_cities:
+                    error_msg += f"\n  Available cities: {', '.join(sorted(available_cities)[:20])}"
+                    if len(available_cities) > 20:
+                        error_msg += f" (and {len(available_cities) - 20} more)"
+                raise NoSuchElementException(error_msg)
             
             # Scroll option into view and click
             self.driver.execute_script("arguments[0].scrollIntoView(true);", city_option)
@@ -256,7 +342,16 @@ class PPRAScraper:
             return True
             
         except (TimeoutException, NoSuchElementException, ElementNotInteractableException) as e:
-            print(f"Error applying city filter: {str(e)}")
+            error_msg = str(e)
+            # If we have available cities info, include it
+            if "Available cities" not in error_msg:
+                try:
+                    available_cities = self._get_available_cities()
+                    if available_cities:
+                        error_msg += f"\n  Available cities: {', '.join(sorted(available_cities)[:20])}"
+                except:
+                    pass
+            print(f"Error applying city filter: {error_msg}")
             return False
     
     def verify_city_filter(self, city_name: str = "Chakwal") -> bool:
