@@ -101,6 +101,12 @@ Configuration
 
 Usage
 
+Automated Daily Execution
+
+Twilio WhatsApp Configuration
+
+Gmail SMTP Email Configuration
+
 Project Structure
 
 API Documentation
@@ -251,6 +257,32 @@ npm run dev
 
 
 Access the application at http://localhost:5173 (Vite default port).
+
+Automated Daily Execution
+
+The scraper and notification system can be scheduled to run automatically on a daily basis. This ensures you receive timely notifications about new tenders without manual intervention.
+
+For detailed setup instructions, see [SCHEDULING.md](docs/SCHEDULING.md).
+
+Quick Setup:
+
+**Linux/Mac (Cron)**:
+```bash
+# Edit crontab
+crontab -e
+
+# Add daily execution at 9 AM
+0 9 * * * /path/to/ppra-tender-alerts/scripts/run_daily_scraper.sh >> /path/to/ppra-tender-alerts/logs/cron.log 2>&1
+```
+
+**Windows (Task Scheduler)**:
+1. Open Task Scheduler
+2. Create a new task to run daily
+3. Set action to: `powershell.exe -ExecutionPolicy Bypass -File "C:\path\to\ppra-tender-alerts\scripts\run_daily_scraper.ps1"`
+
+**Logs**: All executions are logged to `logs/` directory with timestamps and success/failure status.
+
+See [SCHEDULING.md](docs/SCHEDULING.md) for complete setup instructions, troubleshooting, and advanced configuration options.
 
 Twilio WhatsApp Configuration
 

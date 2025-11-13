@@ -51,6 +51,10 @@ db.sqlite3-journal
 /media
 /staticfiles
 
+# Application logs
+logs/*.log
+!logs/.gitkeep
+
 # Testing
 .coverage
 .pytest_cache/
